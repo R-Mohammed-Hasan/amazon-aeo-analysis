@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+:root {
+  --background: #08080F;
+  --card: #111118;
+  --border: #1E1E2E;
+  --foreground: #E8E8F0;
+  --muted: #6B6B80;
+  --accent: #7C6CF8;
+  --accent-hover: #6A5AE8;
+  --critical: #FF4D4D;
+  --warning: #FFAB40;
+  --suggestion: #4DA8FF;
+  --success: #4DDE94;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+@keyframes spin-slow {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in { animation: fade-in 0.4s ease both; }
