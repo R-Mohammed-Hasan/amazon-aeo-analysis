@@ -6,12 +6,18 @@ import { Badge } from '@/components/ui/Badge'
 type Props = {
   result: RoastResult
   listing: ListingData
-  onFix: (issue: RoastIssue) => void
+  onFix: (issue: RoastIssue, key: string) => void
   fixingId: string | null
 }
 
+const SEV_BORDER: Record<string, string> = {
+  critical:   '#F87171',
+  warning:    '#FBBF24',
+  suggestion: '#60A5FA',
+}
+
 export function RoastReport({ result, listing: _listing, onFix, fixingId }: Props) {
-  const [expanded, setExpanded] = useState<number | null>(null)
+  const [openKey, setOpenKey] = useState<string | null>(null)
 
   const grouped = {
     critical:   result.issues.filter(i => i.severity === 'critical'),
@@ -20,45 +26,71 @@ export function RoastReport({ result, listing: _listing, onFix, fixingId }: Prop
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-[var(--foreground)]">Listing Roast</h2>
-        <span className="text-sm text-[var(--muted)]">{result.issues.length} issues found</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[var(--roast)] text-base">🔥</span>
+          <h2 className="text-base font-bold text-[var(--fg)] tracking-tight">Listing Roast</h2>
+        </div>
+        <span className="text-xs font-bold text-[var(--muted)] tabular-nums"
+              style={{ fontFamily: 'var(--font-mono)' }}>
+          {result.issues.length} issues
+        </span>
       </div>
 
+      {/* Issue groups */}
       {(['critical', 'warning', 'suggestion'] as const).map(sev =>
         grouped[sev].length > 0 && (
           <div key={sev} className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[var(--muted)]">{sev}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[var(--muted)] pl-1">
+              {sev} · {grouped[sev].length}
+            </p>
+
             {grouped[sev].map((issue, idx) => {
               const key = `${sev}-${idx}`
-              const isOpen = expanded === parseInt(`${sev === 'critical' ? 0 : sev === 'warning' ? 100 : 200}${idx}`)
+              const isOpen = openKey === key
+              const borderColor = SEV_BORDER[sev]
+
               return (
                 <div
                   key={key}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 flex flex-col gap-3 hover:border-[var(--accent)]/40 transition-colors cursor-pointer"
-                  onClick={() => setExpanded(isOpen ? null : parseInt(`${sev === 'critical' ? 0 : sev === 'warning' ? 100 : 200}${idx}`))}
+                  onClick={() => setOpenKey(isOpen ? null : key)}
+                  className="rounded-xl border border-[var(--border)] bg-[var(--bg)] overflow-hidden cursor-pointer hover:border-[var(--border-lit)] transition-all"
+                  style={{ borderLeft: `3px solid ${borderColor}40` }}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-2 flex-1">
-                      <Badge severity={sev} />
-                      <p className="text-sm text-[var(--foreground)] leading-snug">{issue.issue}</p>
-                    </div>
-                    <span className="text-[var(--muted)] text-xs mt-0.5">{isOpen ? '▲' : '▼'}</span>
+                  {/* Summary row */}
+                  <div className="flex items-start gap-3 p-3.5">
+                    <Badge severity={sev} />
+                    <p className="text-sm text-[var(--fg)] leading-snug flex-1 font-normal">{issue.issue}</p>
+                    <span className="text-[var(--muted)] text-xs mt-0.5 shrink-0 select-none">
+                      {isOpen ? '▲' : '▼'}
+                    </span>
                   </div>
 
+                  {/* Expanded */}
                   {isOpen && (
-                    <div className="flex flex-col gap-3 animate-fade-in">
-                      <div className="rounded-lg bg-[var(--background)] border border-[var(--border)] p-3">
-                        <p className="text-xs text-[var(--muted)] mb-1">Original copy</p>
-                        <p className="text-sm text-[var(--foreground)]/70 italic">"{issue.original}"</p>
+                    <div className="border-t border-[var(--border)] p-3.5 flex flex-col gap-3 animate-fade-in">
+                      <div className="rounded-lg bg-[var(--card)] border border-[var(--border)] p-3">
+                        <p className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-widest mb-1.5">Original</p>
+                        <p className="text-sm text-[var(--fg)]/60 italic leading-relaxed font-normal">
+                          "{issue.original}"
+                        </p>
                       </div>
                       <button
-                        onClick={e => { e.stopPropagation(); onFix(issue) }}
+                        onClick={e => { e.stopPropagation(); onFix(issue, key) }}
                         disabled={fixingId === key}
-                        className="self-start text-sm font-medium px-4 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-50 transition-colors"
+                        className="self-start flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg transition-all active:scale-95 disabled:opacity-40"
+                        style={{
+                          background: `${borderColor}18`,
+                          color: borderColor,
+                          border: `1px solid ${borderColor}30`,
+                        }}
                       >
-                        {fixingId === key ? 'Fixing…' : '✦ Fix this'}
+                        {fixingId === key
+                          ? <><span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" /> Fixing…</>
+                          : <>✦ Fix this</>
+                        }
                       </button>
                     </div>
                   )}

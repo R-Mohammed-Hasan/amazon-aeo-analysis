@@ -5,9 +5,9 @@ import { FixRequest } from '@/types'
 
 export async function POST(req: NextRequest) {
   const body: FixRequest = await req.json()
-
   try {
-    const fixed = await chat(MODELS.ORCHESTRATOR, buildFixPrompt(body))
+    // Claude (WRITER) produces more natural, persuasive copy than GPT
+    const fixed = await chat(MODELS.WRITER, buildFixPrompt(body), 0.5)
     return NextResponse.json({ fixed })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Fix failed'

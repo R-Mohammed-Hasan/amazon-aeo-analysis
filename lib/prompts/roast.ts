@@ -1,39 +1,46 @@
 import { ListingData } from '@/types'
 
+/**
+ * Optimized for Claude — Claude excels at nuanced language critique.
+ * Structured output with concrete examples rather than vague feedback.
+ */
 export function buildRoastPrompt(listing: ListingData): string {
-  return `You are a brutally honest Amazon listing expert. Analyze this listing and identify every weakness.
+  return `You are a senior Amazon conversion rate specialist with 10 years of A/B testing experience. Your job is to ruthlessly critique this listing's copy.
 
-LISTING DATA:
+LISTING:
 Title: ${listing.title}
 
-Bullet Points:
-${listing.bullets.map((b, i) => `${i + 1}. ${b}`).join('\n')}
+Bullets:
+${listing.bullets.map((b, i) => `${i + 1}. ${b}`).join('\n') || '(none)'}
 
 Description:
-${listing.description || '(none provided)'}
+${listing.description || '(none)'}
 
-Brand: ${listing.brand}
-Category: ${listing.category}
+Brand: ${listing.brand || 'Unknown'}
+Category: ${listing.category || 'Unknown'}
 Rating: ${listing.rating} (${listing.reviewCount} reviews)
 
-Return a JSON object ONLY (no markdown, no explanation) in this exact format:
+TASK: Find every copy weakness that is losing this seller conversions. Be surgical — name the exact failure, not a generic comment.
+
+Bad example: "Headline is weak" ← too vague
+Good example: "Headline opens with brand name instead of the #1 shopper benefit — Amazon shoppers scan titles for benefits first" ← specific and actionable
+
+Return ONLY valid JSON (no markdown fences):
 {
-  "score": <number 1-10>,
   "issues": [
     {
       "section": "title" | "bullets" | "description",
       "severity": "critical" | "warning" | "suggestion",
-      "issue": "<one line description of the problem>",
-      "original": "<the exact copy that has the problem>"
+      "issue": "<specific one-line diagnosis>",
+      "original": "<exact copy that has the problem, max 120 chars>"
     }
   ]
 }
 
-Rules:
-- Be brutal and specific. "Weak headline" is not specific. "Headline leads with brand name instead of primary benefit" is.
-- critical = losing sales right now
-- warning = missed opportunity
-- suggestion = nice to have
-- Find at least 5 issues, max 12.
-- Focus on: keyword gaps, features-vs-benefits, vague claims, missing social proof, weak CTAs, generic language`
+Severity guide:
+- critical = actively losing sales (weak benefit, keyword miss, trust killer)
+- warning = missed opportunity (vague claim, feature without benefit, no differentiation)
+- suggestion = polish (tone, flow, missing social proof, weak CTA)
+
+Find 6–10 issues. Focus on: missing primary keyword in title, features-not-benefits, vague superlatives ("best", "premium", "high quality"), absent social proof, no use-case specificity, weak or missing CTAs, and missed keyword variations.`
 }

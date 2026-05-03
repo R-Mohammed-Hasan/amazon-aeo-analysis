@@ -1,53 +1,98 @@
-import FirecrawlApp from '@mendable/firecrawl-js'
-import { ListingData } from '@/types'
+import FirecrawlApp from "@mendable/firecrawl-js";
+import { chat, MODELS } from "@/lib/openrouter";
+import { ListingData } from "@/types";
 
-const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY! })
+const firecrawl = new FirecrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY! });
 
 export async function scrapeAmazonListing(url: string): Promise<ListingData> {
   const result = await firecrawl.scrape(url, {
-    formats: ['markdown'],
-  })
-
-  if (!result.markdown) {
-    throw new Error('Failed to scrape listing — no content returned')
-  }
-
-  return parseListing(result.markdown, url)
+    formats: ["markdown"],
+    onlyMainContent: false,
+  });
+  if (!result.markdown)
+    throw new Error("Failed to scrape listing — no content returned");
+  return parseListing(result.markdown, url);
 }
 
-function parseListing(markdown: string, url: string): ListingData {
-  const asinMatch = url.match(/\/dp\/([A-Z0-9]{10})/)
-  const asin = asinMatch?.[1] ?? ''
+async function parseListing(
+  markdown: string,
+  url: string,
+): Promise<ListingData> {
+  // ── ASIN — URL-deterministic, no LLM needed ──────────────────────────────
+  const asinMatch = url.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/);
+  const asin = asinMatch?.[1] ?? "";
 
-  const titleMatch = markdown.match(/^#\s+(.+)/m)
-  const title = titleMatch?.[1]?.trim() ?? ''
+  // ── Images — aplus prefix is specific enough for regex ────────────────────
+  const imageMatches =
+    markdown.match(
+      /https?:\/\/m\.media-amazon\.com\/images\/S\/aplus-media-library-service-media\/[^\s"')\]>]+\.(?:jpg|jpeg|png|webp)/gi,
+    ) ?? [];
+  const imageUrls = [...new Set(imageMatches)].slice(0, 8);
 
-  const bulletMatches = markdown.match(/^[-•]\s+(.+)/gm) ?? []
-  const bullets = bulletMatches.slice(0, 7).map(b => b.replace(/^[-•]\s+/, '').trim())
-
-  const priceMatch = markdown.match(/[₹$£€]\s?[\d,]+\.?\d*/)?.[0] ?? ''
-  const ratingMatch = markdown.match(/([\d.]+)\s+out of\s+5/)?.[1] ?? ''
-  const reviewMatch = markdown.match(/([\d,]+)\s+ratings?/)?.[1] ?? ''
-  const bsrMatch = markdown.match(/Best Sellers Rank[^#\n]*#([\d,]+)/)?.[1] ?? ''
-  const brandMatch = markdown.match(/(?:Brand|by)\s*[:\s]+([A-Za-z0-9 &]+)/i)?.[1]?.trim() ?? ''
-  const categoryMatch = markdown.match(/in\s+([A-Za-z &]+)\s*\(/)?.[1]?.trim() ?? ''
-
-  const imageMatches = markdown.match(/https?:\/\/[^\s"')]+\.(jpg|jpeg|png|webp)[^\s"')']*/gi) ?? []
-  const imageUrls = [...new Set(imageMatches)].slice(0, 6)
-
-  const descMatch = markdown.match(/(?:Product Description|About this item)[^\n]*\n+([\s\S]{100,500})/i)?.[1]?.trim() ?? ''
+  // ── Everything else — LLM extraction ─────────────────────────────────────
+  // Regex is too brittle: warranty add-on sections, "Customers who viewed"
+  // carousels, nav panels, and the actual product all look identical structurally.
+  // gpt-4o-mini understands context and can reliably pick the main product.
+  const extracted = await extractWithLLM(markdown);
 
   return {
     asin,
-    title,
-    bullets,
-    description: descMatch,
-    brand: brandMatch,
-    category: categoryMatch,
-    price: priceMatch,
-    bsr: bsrMatch,
     imageUrls,
-    rating: ratingMatch,
-    reviewCount: reviewMatch,
-  }
+    title: extracted.title ?? "",
+    bullets: extracted.bullets ?? [],
+    description: extracted.description ?? "",
+    brand: extracted.brand ?? "",
+    category: extracted.category ?? "",
+    price: extracted.price ?? "",
+    bsr: extracted.bsr ?? "",
+    rating: extracted.rating ?? "",
+    reviewCount: extracted.reviewCount ?? "",
+  };
+}
+
+type ExtractedFields = {
+  title: string;
+  brand: string;
+  category: string;
+  price: string;
+  rating: string;
+  reviewCount: string;
+  bsr: string;
+  bullets: string[];
+  description: string;
+};
+
+async function extractWithLLM(markdown: string): Promise<ExtractedFields> {
+  const prompt = `Identify the product first and then extract product listing data from this Amazon page markdown. Return ONLY valid JSON, no other text.
+
+RULES:
+- Extract data for the MAIN product being sold on this page only
+- IGNORE completely: warranty/insurance add-on sections, "Customers who viewed" carousels, "Keyboard shortcuts" panels, navigation menus, breadcrumbs, sponsored products, related product sections
+- bullets: 3–7 actual product feature bullet points (what the product does/has), NOT warranty terms or claim instructions
+- description: prose description of the product, max 400 chars, NOT nav links or section headers
+- price: include currency symbol (e.g. ₹1,499 or $29.99)
+- rating: just the number (e.g. 4.3)
+- reviewCount: just the number with commas if present (e.g. 1,251)
+- bsr: just the rank number (e.g. 1136), no # symbol
+- If a field is not found, use ""
+
+JSON schema to return:
+{
+  "title": "",
+  "brand": "",
+  "category": "",
+  "price": "",
+  "rating": "",
+  "reviewCount": "",
+  "bsr": "",
+  "bullets": [],
+  "description": ""
+}
+
+MARKDOWN (truncated to first 8000 chars):
+${markdown.slice(0, 8000)}`;
+
+  const raw = await chat(MODELS.PARSER, prompt, 0);
+  const json = raw.replace(/```json\n?|```/g, "").trim();
+  return JSON.parse(json);
 }

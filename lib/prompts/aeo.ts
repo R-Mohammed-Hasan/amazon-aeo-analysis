@@ -1,37 +1,61 @@
 import { ListingData } from '@/types'
 
+/**
+ * Query generation — uses GPT-4o-mini (best at structured JSON output).
+ *
+ * Critical fix: pass bullets + description so queries are product-specific,
+ * not generic category queries.
+ */
 export function buildQueryGenPrompt(listing: ListingData): string {
-  return `Generate 10 realistic shopper queries someone would type into an AI assistant (like ChatGPT or Google Gemini) when looking for a product like this.
+  // Build a clean feature summary from bullets + description
+  const features = [
+    ...listing.bullets.filter(b => b.length > 10),
+    listing.description ? listing.description.slice(0, 300) : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 
-Product: ${listing.title}
-Brand: ${listing.brand}
+  return `You are generating AEO test queries for a specific product. Your job is to write questions a real shopper would type into ChatGPT or Gemini when looking for THIS product.
+
+PRODUCT DETAILS:
+Title: ${listing.title || '(see features below)'}
 Category: ${listing.category}
+Brand: ${listing.brand} (DO NOT mention this brand in any query)
+Key Features:
+${features || 'No features extracted — use category and title clues only'}
 
-Rules:
-- Write queries as a real shopper would ask, not keyword-style
-- Mix: general ("best X for Y"), comparative ("X vs Y"), use-case ("X for seniors"), problem-based ("help with Z")
-- Do NOT include the brand name in any query
-- Return a JSON array of 10 strings ONLY, no explanation
+RULES:
+1. Queries MUST reference specific features of this product (capacity, wattage, technology, use-case, etc.)
+2. Write exactly how a real shopper types — conversational, not keyword-style
+3. Mix query types: best-for-use-case, comparison, problem-solving, specific-feature, value-based
+4. NEVER include the brand name "${listing.brand}" in any query
+5. Each query: 5–15 words
 
-Example format: ["best magnesium for leg cramps", "which magnesium supplement helps with sleep", ...]`
+BAD (too generic): "What are the best kitchen appliances?"
+GOOD (specific):   "best air fryer under 6000 rupees for Indian cooking"
+GOOD (feature):    "7 litre air fryer 80 percent less oil worth it"
+GOOD (use-case):   "air fryer that can roast and bake without preheating"
+
+Return a JSON array of 8 strings ONLY. No other text:
+["query 1", "query 2", ...]`
 }
 
-export function buildAEOQueryPrompt(query: string, brand: string, title: string): string {
+/**
+ * Standard AEO query — for GPT, Claude, Gemini.
+ * Prompts them to act as a helpful AI assistant making specific recommendations.
+ */
+export function buildAEOQueryPrompt(query: string): string {
   return `${query}
 
-Please recommend specific products with brand names. Be detailed about why each product is good.`
+Recommend 3–5 specific products with exact brand names. Be direct — name the product, say why it's good.`
 }
 
-export function buildMentionCheckPrompt(response: string, brand: string, title: string): string {
-  return `Given this AI response about a product query, check if the brand "${brand}" or product "${title}" is mentioned.
+/**
+ * Perplexity-specific — searches the web live.
+ * No formatting instructions. Let it browse and respond naturally.
+ */
+export function buildPerplexityQueryPrompt(query: string): string {
+  return `${query}
 
-RESPONSE:
-${response}
-
-Return JSON only:
-{
-  "mentioned": true | false,
-  "position": <1-based position if mentioned, null if not>,
-  "excerpt": "<the exact sentence mentioning it, or null>"
-}`
+What are the best options available right now? Include specific brand names.`
 }
