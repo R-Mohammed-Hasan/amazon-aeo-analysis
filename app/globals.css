@@ -35,7 +35,7 @@
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--fg);
-  --font-sans: var(--font-syne);
+  --font-sans: var(--font-poppins);
   --font-mono: var(--font-mono);
 }
 
@@ -45,7 +45,7 @@ html { color-scheme: dark; }
 body {
   background-color: var(--bg);
   color: var(--fg);
-  font-family: var(--font-syne), system-ui, sans-serif;
+  font-family: var(--font-poppins), system-ui, sans-serif;
 
   /* Dot grid texture */
   background-image:

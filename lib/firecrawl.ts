@@ -62,7 +62,32 @@ type ExtractedFields = {
   description: string;
 };
 
+/**
+ * Amazon markdown from Firecrawl (onlyMainContent: false) starts with a large
+ * navigation section — hundreds of lines that are purely standalone markdown
+ * links: [text](url). These push the actual product content (title, bullets,
+ * price table, BSR) well past the first 8000 chars.
+ *
+ * Strip those nav-only lines first, then send a 20000-char window of the
+ * cleaned content. After stripping, the product info is near the top and the
+ * larger window ensures the product detail table (price, BSR, rating) is included.
+ */
+function stripNavBoilerplate(markdown: string): string {
+  return markdown
+    .split('\n')
+    .filter(line => {
+      const l = line.trim()
+      // Remove lines that are solely a markdown link — these are nav/menu items.
+      // Product content uses inline links within prose, not standalone link lines.
+      if (/^\[.{1,120}\]\(https?:\/\/[^)]+\)\s*$/.test(l)) return false
+      return true
+    })
+    .join('\n')
+}
+
 async function extractWithLLM(markdown: string): Promise<ExtractedFields> {
+  const cleaned = stripNavBoilerplate(markdown)
+
   const prompt = `Identify the product first and then extract product listing data from this Amazon page markdown. Return ONLY valid JSON, no other text.
 
 RULES:
@@ -70,7 +95,7 @@ RULES:
 - IGNORE completely: warranty/insurance add-on sections, "Customers who viewed" carousels, "Keyboard shortcuts" panels, navigation menus, breadcrumbs, sponsored products, related product sections
 - bullets: 3–7 actual product feature bullet points (what the product does/has), NOT warranty terms or claim instructions
 - description: prose description of the product, max 400 chars, NOT nav links or section headers
-- price: include currency symbol (e.g. ₹1,499 or $29.99)
+- price: the MAIN product price with currency symbol (e.g. ₹1,499 or $29.99) — NOT warranty/add-on prices
 - rating: just the number (e.g. 4.3)
 - reviewCount: just the number with commas if present (e.g. 1,251)
 - bsr: just the rank number (e.g. 1136), no # symbol
@@ -89,10 +114,10 @@ JSON schema to return:
   "description": ""
 }
 
-MARKDOWN (truncated to first 8000 chars):
-${markdown.slice(0, 8000)}`;
+MARKDOWN:
+${cleaned}`;
 
-  const raw = await chat(MODELS.PARSER, prompt, 0);
+  const raw = await chat(MODELS.EXTRACTOR, prompt, 0);
   const json = raw.replace(/```json\n?|```/g, "").trim();
   return JSON.parse(json);
 }

@@ -24,6 +24,10 @@ export const openrouter = new OpenAI({
 export const MODELS = {
   PARSER: "openai/gpt-4o-mini",
 
+  // Listing extraction — large noisy markdown, needs 200k context + strong
+  // instruction following to ignore warranty sections, nav, carousels, etc.
+  EXTRACTOR: "anthropic/claude-sonnet-4-5",
+
   WRITER: "anthropic/claude-3.5-haiku",
 
   AEO_GPT: "openai/gpt-4o-mini",
